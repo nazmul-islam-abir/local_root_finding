@@ -1,3 +1,4 @@
+// map_screen.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -12,6 +13,7 @@ import '../models/saved_place.dart';
 import '../models/route_data.dart';
 import '../models/route_info.dart';
 import '../models/navigation_step.dart';
+import '../models/place_location.dart';
 import '../services/location_service.dart';
 import '../services/routing_service.dart';
 import '../services/storage_service.dart';
@@ -20,6 +22,8 @@ import '../widgets/destination_card.dart';
 import '../widgets/navigation_card.dart';
 import '../screens/routes_screen.dart';
 import '../screens/saved_places_screen.dart';
+import '../screens/source_destination_screen.dart';
+import '../widgets/route_detail_panel.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -64,6 +68,14 @@ class _MapScreenState extends State<MapScreen> {
   double currentRotation = 0.0;
   bool showCompass = false;
   double compassHeading = 0.0;
+
+  // Route planning features
+  bool showRouteDetailsPanel = false;
+  PlaceLocation? customSourcePlace;
+  PlaceLocation? customDestinationPlace;
+  List<RouteData> customRoutes = [];
+  RouteInfo? customRouteInfo;
+  List<NavigationStep> customNavigationSteps = [];
 
   List<Map<String, dynamic>> allBangladeshAirports = [];
 
@@ -497,6 +509,8 @@ class _MapScreenState extends State<MapScreen> {
       isLoadingRoutes = false;
       isFetchingRoutes = false;
       showRouteSelectionPanel = false;
+      showRouteDetailsPanel = false;
+      customRoutes.clear();
       
       resetMapRotation();
     });
@@ -537,7 +551,9 @@ class _MapScreenState extends State<MapScreen> {
       isLoadingRoutes = false;
       isFetchingRoutes = false;
       showRouteSelectionPanel = false;
+      showRouteDetailsPanel = false;
       selectedRouteIndex = 0;
+      customRoutes.clear();
       
       resetMapRotation();
     });
@@ -556,9 +572,13 @@ class _MapScreenState extends State<MapScreen> {
   void cancelRouteSelection() {
     setState(() {
       showRouteSelectionPanel = false;
+      showRouteDetailsPanel = false;
       allRoutes.clear();
+      customRoutes.clear();
       navigationSteps.clear();
+      customNavigationSteps.clear();
       currentRouteInfo = null;
+      customRouteInfo = null;
       selectedRouteIndex = 0;
     });
     
@@ -585,6 +605,7 @@ class _MapScreenState extends State<MapScreen> {
       isLoadingRoutes = true;
       isFetchingRoutes = true;
       showRouteSelectionPanel = false;
+      showRouteDetailsPanel = false;
     });
     
     lastRouteRequest = DateTime.now();
@@ -634,6 +655,7 @@ class _MapScreenState extends State<MapScreen> {
       
       setState(() {
         allRoutes = newRoutes;
+        customRoutes = newRoutes;
         isLoadingRoutes = false;
         isFetchingRoutes = false;
         showRouteSelectionPanel = true;
@@ -645,8 +667,10 @@ class _MapScreenState extends State<MapScreen> {
             startAddress: "Your Location",
             endAddress: destinationName ?? "Destination",
           );
+          customRouteInfo = currentRouteInfo;
           
           _extractNavigationSteps(allRoutes[selectedRouteIndex].routeData);
+          customNavigationSteps = List.from(navigationSteps);
         }
       });
       
@@ -702,6 +726,16 @@ class _MapScreenState extends State<MapScreen> {
           }
         }
       }
+    }
+  }
+  
+  String _getSimpleInstruction(String type) {
+    switch (type) {
+      case 'turn': return 'Turn';
+      case 'new name': return 'Continue';
+      case 'depart': return 'Start';
+      case 'arrive': return 'Arrive';
+      default: return 'Continue';
     }
   }
   
@@ -812,6 +846,7 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       navigationStarted = true;
       showRouteSelectionPanel = false;
+      showRouteDetailsPanel = false;
       currentTabIndex = 1;
     });
     
@@ -918,16 +953,6 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  String _getSimpleInstruction(String type) {
-    switch (type) {
-      case 'turn': return 'Turn';
-      case 'new name': return 'Continue';
-      case 'depart': return 'Start';
-      case 'arrive': return 'Arrive';
-      default: return 'Continue';
-    }
-  }
-
   void goToMyLocation() {
     mapController.move(currentLocation, 16);
     setState(() {
@@ -940,6 +965,7 @@ class _MapScreenState extends State<MapScreen> {
       navigationStarted = false;
       navigationSteps.clear();
       currentRouteInfo = null;
+      showRouteDetailsPanel = false;
     });
     resetMapRotation();
   }
@@ -998,6 +1024,61 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  void _openSourceDestinationScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SourceDestinationScreen(
+          onRouteCalculated: (
+            PlaceLocation source,
+            PlaceLocation destination,
+            List<RouteData> routes,
+            RouteInfo? routeInfo,
+            List<NavigationStep> steps,
+          ) {
+            setState(() {
+              // Set source as current location for navigation
+              customSourcePlace = source;
+              customDestinationPlace = destination;
+              this.destination = LatLng(destination.coordinates.latitude, destination.coordinates.longitude);
+              destinationName = destination.name;
+              destinationAddress = destination.address;
+              
+              allRoutes = routes;
+              customRoutes = routes;
+              customRouteInfo = routeInfo;
+              customNavigationSteps = steps;
+              
+              selectedRouteIndex = 0;
+              showRouteSelectionPanel = false;
+              showRouteDetailsPanel = true;
+              navigationStarted = false;
+              
+              // Update currentRouteInfo
+              if (routeInfo != null) {
+                currentRouteInfo = routeInfo;
+              }
+              
+              // Extract navigation steps if available
+              if (steps.isNotEmpty) {
+                navigationSteps = steps;
+              } else if (routes.isNotEmpty && routes[0].routeData != null) {
+                _extractNavigationSteps(routes[0].routeData);
+              }
+            });
+            
+            // Fit routes to map
+            if (routes.isNotEmpty) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                fitAllRoutesToMap();
+              });
+            }
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1025,7 +1106,7 @@ class _MapScreenState extends State<MapScreen> {
                   userAgentPackageName: 'com.example.app',
                 ),
                 
-                if (allRoutes.isNotEmpty && !navigationStarted)
+                if (allRoutes.isNotEmpty && !navigationStarted && !showRouteDetailsPanel)
                   for (int i = 0; i < allRoutes.length; i++)
                     PolylineLayer(
                       polylines: [
@@ -1035,6 +1116,22 @@ class _MapScreenState extends State<MapScreen> {
                           color: allRoutes[i].isSelected 
                               ? Colors.blue 
                               : allRoutes[i].color.withOpacity(0.7),
+                          borderStrokeWidth: selectedRouteIndex == i ? 2 : 0,
+                          borderColor: selectedRouteIndex == i ? Colors.white : Colors.transparent,
+                        ),
+                      ],
+                    ),
+                
+                if (showRouteDetailsPanel && customRoutes.isNotEmpty)
+                  for (int i = 0; i < customRoutes.length; i++)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: customRoutes[i].points,
+                          strokeWidth: selectedRouteIndex == i ? 8 : 3,
+                          color: customRoutes[i].isSelected 
+                              ? Colors.blue 
+                              : customRoutes[i].color.withOpacity(0.5),
                           borderStrokeWidth: selectedRouteIndex == i ? 2 : 0,
                           borderColor: selectedRouteIndex == i ? Colors.white : Colors.transparent,
                         ),
@@ -1099,6 +1196,26 @@ class _MapScreenState extends State<MapScreen> {
                           ),
                         ),
                       ),
+                    // Source marker for custom routes
+                    if (showRouteDetailsPanel && customSourcePlace != null)
+                      Marker(
+                        point: customSourcePlace!.coordinates,
+                        width: 60,
+                        height: 60,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.green.withOpacity(0.5),
+                                blurRadius: 8,
+                                spreadRadius: 3,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.circle, color: Colors.green, size: 30),
+                        ),
+                      ),
                   ],
                 ),
                 
@@ -1113,7 +1230,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
           
           // Cancel Destination Button
-          if (destination != null && !navigationStarted && !showRouteSelectionPanel)
+          if (destination != null && !navigationStarted && !showRouteSelectionPanel && !showRouteDetailsPanel)
             Positioned(
               top: 60,
               right: 16,
@@ -1168,7 +1285,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           
           // Top Search Bar
-          if (currentTabIndex == 0 && !navigationStarted && !showRouteSelectionPanel && destination == null)
+          if (currentTabIndex == 0 && !navigationStarted && !showRouteSelectionPanel && destination == null && !showRouteDetailsPanel)
             Positioned(
               top: 50,
               left: 16,
@@ -1187,7 +1304,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           
           // Suggestions Dropdown
-          if (suggestions.isNotEmpty && currentTabIndex == 0 && !navigationStarted && !showRouteSelectionPanel && destination == null)
+          if (suggestions.isNotEmpty && currentTabIndex == 0 && !navigationStarted && !showRouteSelectionPanel && destination == null && !showRouteDetailsPanel)
             Positioned(
               top: 108,
               left: 16,
@@ -1275,7 +1392,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           
           // Destination Info Card
-          if (destination != null && !navigationStarted && !showRouteSelectionPanel && allRoutes.isEmpty && !isLoadingRoutes)
+          if (destination != null && !navigationStarted && !showRouteSelectionPanel && allRoutes.isEmpty && !isLoadingRoutes && !showRouteDetailsPanel)
             Positioned(
               bottom: 80,
               left: 16,
@@ -1295,7 +1412,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           
           // Route Selection Panel
-          if (showRouteSelectionPanel && allRoutes.isNotEmpty && !navigationStarted)
+          if (showRouteSelectionPanel && allRoutes.isNotEmpty && !navigationStarted && !showRouteDetailsPanel)
             Positioned(
               bottom: 0,
               left: 0,
@@ -1488,6 +1605,74 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           
+          // Route Detail Panel (when planning a route)
+          if (showRouteDetailsPanel && customRoutes.isNotEmpty && !navigationStarted)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: RouteDetailPanel(
+                routeInfo: customRouteInfo ?? currentRouteInfo!,
+                steps: customNavigationSteps,
+                alternativeRoutes: customRoutes,
+                onAlternativeRouteSelected: (index) {
+                  setState(() {
+                    selectedRouteIndex = index;
+                    for (int i = 0; i < customRoutes.length; i++) {
+                      customRoutes[i].isSelected = (i == index);
+                      allRoutes[i].isSelected = (i == index);
+                    }
+                    if (customRoutes[index].routeData != null) {
+                      _extractNavigationSteps(customRoutes[index].routeData);
+                      customNavigationSteps = List.from(navigationSteps);
+                    }
+                    customRouteInfo = RouteInfo(
+                      distance: customRoutes[index].distance,
+                      duration: customRoutes[index].duration,
+                      startAddress: customSourcePlace?.address ?? "Source",
+                      endAddress: customDestinationPlace?.address ?? "Destination",
+                    );
+                    currentRouteInfo = customRouteInfo;
+                  });
+                  
+                  if (customRoutes[index].points.isNotEmpty) {
+                    fitSingleRouteToMap(customRoutes[index].points);
+                  }
+                },
+                onStartNavigation: () {
+                  setState(() {
+                    navigationStarted = true;
+                    showRouteDetailsPanel = false;
+                    showRouteSelectionPanel = false;
+                    currentTabIndex = 1;
+                  });
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Navigation started! Follow the route."),
+                      backgroundColor: Colors.blue,
+                      duration: Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                onClose: () {
+                  setState(() {
+                    showRouteDetailsPanel = false;
+                    customRoutes.clear();
+                    customRouteInfo = null;
+                    customNavigationSteps.clear();
+                    customSourcePlace = null;
+                    customDestinationPlace = null;
+                    allRoutes.clear();
+                    destination = null;
+                    destinationName = null;
+                    destinationAddress = null;
+                  });
+                },
+              ),
+            ),
+          
           // Navigation Active Card
           if (navigationStarted && currentRouteInfo != null)
             Positioned(
@@ -1524,16 +1709,23 @@ class _MapScreenState extends State<MapScreen> {
                   onTap: (index) {
                     setState(() {
                       currentTabIndex = index;
+                      
+                      // Hide route selection panels when switching tabs
+                      if (index != 1) {
+                        showRouteSelectionPanel = false;
+                        showRouteDetailsPanel = false;
+                      }
                     });
                     
-                    // Don't refresh or reset anything - just change tab
                     if (index == 1 && allRoutes.isNotEmpty) {
                       if (allRoutes.isNotEmpty && selectedRouteIndex < allRoutes.length) {
                         fitSingleRouteToMap(allRoutes[selectedRouteIndex].points);
                       }
                     } else if (index == 0) {
-                      // Just ensure map is centered, but don't reset rotation
                       mapController.move(currentLocation, currentZoom);
+                    } else if (index == 3) {
+                      // Open route planner
+                      _openSourceDestinationScreen();
                     }
                   },
                   type: BottomNavigationBarType.fixed,
@@ -1552,6 +1744,10 @@ class _MapScreenState extends State<MapScreen> {
                       icon: Icon(Icons.bookmark, size: 22),
                       label: 'Saved',
                     ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.edit_location, size: 22),
+                      label: 'Plan',
+                    ),
                   ],
                 ),
               ),
@@ -1559,7 +1755,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
           
           // Routes Tab Content
-          if (currentTabIndex == 1 && allRoutes.isNotEmpty && !navigationStarted)
+          if (currentTabIndex == 1 && allRoutes.isNotEmpty && !navigationStarted && !showRouteDetailsPanel)
             Positioned(
               bottom: 80,
               left: 16,
@@ -1573,7 +1769,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           
           // Saved Places Tab Content
-          if (currentTabIndex == 2 && !navigationStarted)
+          if (currentTabIndex == 2 && !navigationStarted && !showRouteDetailsPanel)
             Positioned(
               bottom: 80,
               left: 16,
@@ -1595,7 +1791,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           
           // My Location Button
-          if (!navigationStarted)
+          if (!navigationStarted && !showRouteDetailsPanel)
             Positioned(
               bottom: 80,
               right: 16,
@@ -1604,6 +1800,20 @@ class _MapScreenState extends State<MapScreen> {
                 onPressed: goToMyLocation,
                 backgroundColor: Colors.white,
                 child: const Icon(Icons.my_location, color: Colors.blue, size: 18),
+              ),
+            ),
+          
+          // Quick Plan Button (FAB)
+          if (!navigationStarted && currentTabIndex == 0 && !showRouteSelectionPanel && destination == null && !showRouteDetailsPanel)
+            Positioned(
+              bottom: 80,
+              left: 16,
+              child: FloatingActionButton(
+                mini: true,
+                onPressed: _openSourceDestinationScreen,
+                backgroundColor: Colors.blue,
+                child: const Icon(Icons.edit_location, color: Colors.white, size: 20),
+                tooltip: 'Plan Route',
               ),
             ),
         ],
