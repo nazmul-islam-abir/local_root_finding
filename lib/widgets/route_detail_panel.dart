@@ -272,7 +272,7 @@ class RouteDetailPanel extends StatelessWidget {
             ),
           ),
           Text(
-            '${(index + 1).toString()}',
+            (index + 1).toString(),
             style: TextStyle(fontSize: 12, color: Colors.grey[400]),
           ),
         ],

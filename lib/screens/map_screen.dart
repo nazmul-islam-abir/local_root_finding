@@ -192,7 +192,7 @@ class _MapScreenState extends State<MapScreen> {
                   Text('Lat: ${location.latitude.toStringAsFixed(6)}'),
                   Text('Lng: ${location.longitude.toStringAsFixed(6)}'),
                   if (address != null) 
-                    Text('Address: ${address.length > 50 ? address.substring(0, 50) + '...' : address}'),
+                    Text('Address: ${address.length > 50 ? '${address.substring(0, 50)}...' : address}'),
                 ],
               ),
             ),
@@ -410,11 +410,11 @@ class _MapScreenState extends State<MapScreen> {
           String type = item['type'] ?? 'place';
           
           localSuggestions.add({
-            'name': shortName.length > 50 ? shortName.substring(0, 50) + '...' : shortName,
+            'name': shortName.length > 50 ? '${shortName.substring(0, 50)}...' : shortName,
             'lat': double.parse(item['lat']),
             'lon': double.parse(item['lon']),
             'distance': distance,
-            'address': address.length > 80 ? address.substring(0, 80) + '...' : address,
+            'address': address.length > 80 ? '${address.substring(0, 80)}...' : address,
             'type': type,
             'source': 'online',
           });
@@ -523,7 +523,7 @@ class _MapScreenState extends State<MapScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("✓ ${name.length > 40 ? name.substring(0, 40) + '...' : name}"),
+            Text("✓ ${name.length > 40 ? '${name.substring(0, 40)}...' : name}"),
             if (address != null) 
               Text(address, style: const TextStyle(fontSize: 12)),
           ],
@@ -797,8 +797,9 @@ class _MapScreenState extends State<MapScreen> {
     
     if (latDiff > 0 || lngDiff > 0) {
       double maxDiff = math.max(latDiff, lngDiff);
-      if (maxDiff < 0.01) zoom = 16;
-      else if (maxDiff < 0.02) zoom = 15.5;
+      if (maxDiff < 0.01) {
+        zoom = 16;
+      } else if (maxDiff < 0.02) zoom = 15.5;
       else if (maxDiff < 0.05) zoom = 14.5;
       else if (maxDiff < 0.1) zoom = 13.5;
       else if (maxDiff < 0.2) zoom = 12.5;
@@ -903,8 +904,9 @@ class _MapScreenState extends State<MapScreen> {
     
     if (latDiff > 0 || lngDiff > 0) {
       double maxDiff = math.max(latDiff, lngDiff);
-      if (maxDiff < 0.01) zoom = 16;
-      else if (maxDiff < 0.02) zoom = 15;
+      if (maxDiff < 0.01) {
+        zoom = 16;
+      } else if (maxDiff < 0.02) zoom = 15;
       else if (maxDiff < 0.05) zoom = 14;
       else if (maxDiff < 0.1) zoom = 13;
       else if (maxDiff < 0.2) zoom = 12;
@@ -1812,8 +1814,8 @@ class _MapScreenState extends State<MapScreen> {
                 mini: true,
                 onPressed: _openSourceDestinationScreen,
                 backgroundColor: Colors.blue,
-                child: const Icon(Icons.edit_location, color: Colors.white, size: 20),
                 tooltip: 'Plan Route',
+                child: const Icon(Icons.edit_location, color: Colors.white, size: 20),
               ),
             ),
         ],

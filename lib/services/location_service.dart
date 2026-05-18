@@ -1,5 +1,4 @@
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
 import 'dart:math' as math;
 
 class LocationService {

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:latlong2/latlong.dart';
 
 class DestinationCard extends StatelessWidget {
   final String destinationName;
